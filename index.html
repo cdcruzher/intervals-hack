@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modelador Heurístico de Intervalos Musicales</title>
+    
+    <!-- Motor de Estilos: Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Librerías de React Base -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Compilador Babel para JSX In-Browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-950 text-gray-100 font-mono selection:bg-cyan-900">
+    
+    <!-- Raíz del DOM Virtual -->
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- COMPONENTES DE ICONOGRAFÍA VECTORIAL PURA ---
+        const Activity = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+        const ArrowRight = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>;
+        const ArrowDown = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>;
+        const Zap = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+        const RefreshCw = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>;
+        const ChevronRight = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"/></svg>;
+        const Globe = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>;
+        
+        // Iconos de Red de Valor
+        const LinkIcon = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+        );
+        const PaypalIcon = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+                <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.474 0-.88.358-.964.827l-1.068 6.728-.027.117a.641.641 0 0 1-.63.497l.15-.02zM6.438 8.549l-1.64 10.344h3.22l1.047-6.602a1.867 1.867 0 0 1 1.844-1.57h2.152c3.088 0 5.65-.965 6.34-4.512.164-.843.14-1.62-.057-2.18-.328-.93-1.127-1.464-2.457-1.464H9.083c-.474 0-.88.358-.964.827l-.027.117-1.654 5.04z" />
+            </svg>
+        );
+
+        // --- CONSTANTES DEL SISTEMA DIATÓNICO ---
+        const NOTES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+        const NATURAL_HALF_STEPS = ['E', 'B'];
+
+        // --- DICCIONARIO DE ESTADO (i18n) ---
+        const DICT = {
+            es: {
+                title: "SISTEMA DE ANÁLISIS DE INTERVALOS [HACK_MODE]",
+                subtitle: "Traducción de modelo cognitivo heurístico a matriz determinista. Despliegue estático.",
+                createdBy: "Creado por",
+                support: "Apoyar Proyecto",
+                website: "Sitio Web",
+                hack1Btn: "HACK 1: Cálculo Estructural",
+                hack2Btn: "HACK 2: Inversión Topológica",
+                rootNote: "Nota Raíz",
+                accidental: "Alt.",
+                targetNote: "Nota Destino",
+                extendCompound: "Extender a Intervalo Compuesto (+1 Octava)",
+                trajectoryAnalysis: "Análisis de Trayectoria",
+                baseDegree: "Grado Base Identificado:",
+                spaces: "espacios",
+                collisions: "Colisiones Asimétricas (E/B):",
+                chromaticShift: "Desplazamiento Cromático:",
+                semitones: "semitonos",
+                heuristicCalc: "Cálculo Heurístico Expuesto",
+                calcComment: "// (Esp - Cruces) * 2 + Cruces + [Cromatismo]",
+                resultInterval: "Intervalo Resultante",
+                refMatrix: "Matriz de Referencia",
+                qualityDegree: "Cualidad \\ Grado",
+                hack2Title: "Definición de Vector Descendente",
+                originHigh: "Nota Origen (Alta)",
+                targetLow: "Nota Destino (Baja)",
+                step1Asc: "Paso 1: Ancla Ascendente",
+                ascVector: "Vector Ascendente:",
+                degreeIdentified: "Grado Identificado:",
+                anchorResult: "Resultado Ancla:",
+                step2Inv: "Paso 2: Inversión (Regla del 9)",
+                oppositeOf: "Opuesto de",
+                acousticVerif: "Verificación Acústica",
+                projection: "+ Proyección",
+                projDesc: "Grado +7, St +12",
+                descCheckMatrix: "Matriz de Comprobación Descendente",
+                langToggle: "Switch to English",
+                st: "st"
+            },
+            en: {
+                title: "INTERVAL ANALYSIS SYSTEM [HACK_MODE]",
+                subtitle: "Translation of heuristic cognitive model to deterministic matrix. Static deployment.",
+                createdBy: "Created by",
+                support: "Support Project",
+                website: "Website",
+                hack1Btn: "HACK 1: Structural Calculation",
+                hack2Btn: "HACK 2: Topological Inversion",
+                rootNote: "Root Note",
+                accidental: "Acc.",
+                targetNote: "Target Note",
+                extendCompound: "Extend to Compound Interval (+1 Octave)",
+                trajectoryAnalysis: "Trajectory Analysis",
+                baseDegree: "Identified Base Degree:",
+                spaces: "spaces",
+                collisions: "Asymmetric Collisions (E/B):",
+                chromaticShift: "Chromatic Shift:",
+                semitones: "semitones",
+                heuristicCalc: "Exposed Heuristic Calculation",
+                calcComment: "// (Spc - Crossings) * 2 + Crossings + [Chromatism]",
+                resultInterval: "Resulting Interval",
+                refMatrix: "Reference Matrix",
+                qualityDegree: "Quality \\ Degree",
+                hack2Title: "Descending Vector Definition",
+                originHigh: "Origin Note (High)",
+                targetLow: "Target Note (Low)",
+                step1Asc: "Step 1: Ascending Anchor",
+                ascVector: "Ascending Vector:",
+                degreeIdentified: "Identified Degree:",
+                anchorResult: "Anchor Result:",
+                step2Inv: "Step 2: Inversion (Rule of 9)",
+                oppositeOf: "Opposite of",
+                acousticVerif: "Acoustic Verification",
+                projection: "+ Projection",
+                projDesc: "Degree +7, St +12",
+                descCheckMatrix: "Descending Checking Matrix",
+                langToggle: "Cambiar a Español",
+                st: "st"
+            }
+        };
+
+        // --- TRANSMUTADOR LINGÜÍSTICO MUSICAL ---
+        const translateInterval = (name, lang) => {
+            if (lang === 'es' || !name) return name;
+            return name
+                .replace('Unísono', 'Unison')
+                .replace('2da', '2nd')
+                .replace('3ra', '3rd')
+                .replace('4ta', '4th')
+                .replace('5ta', '5th')
+                .replace('6ta', '6th')
+                .replace('7ma', '7th')
+                .replace('Octava', 'Octave')
+                .replace('9na', '9th')
+                .replace('10ma', '10th')
+                .replace('11va', '11th')
+                .replace('12va', '12th')
+                .replace('13ra', '13th')
+                .replace('14ta', '14th')
+                .replace('15ta', '15th')
+                .replace('Mayor', 'Major')
+                .replace('menor', 'minor')
+                .replace('Justa', 'Perfect')
+                .replace('Justo', 'Perfect')
+                .replace('Aumentada', 'Augmented')
+                .replace('Aumentado', 'Augmented')
+                .replace('Disminuida', 'Diminished')
+                .replace('Disminuido', 'Diminished')
+                .replace('Alterada', 'Altered')
+                .replace('Alterado', 'Altered')
+                .replace('Intervalo Compuesto', 'Compound Interval')
+                .replace('(teórico)', '(theoretical)');
+        };
+
+        const getIntervalName = (degree, semitones) => {
+            let simpleDegree = degree;
+            let simpleSemitones = semitones;
+            let isCompound = false;
+
+            if (degree > 8) {
+                simpleDegree = degree - 7;
+                simpleSemitones = semitones - 12;
+                isCompound = true;
+            }
+
+            const diff = simpleSemitones;
+            let name = '';
+            switch (simpleDegree) {
+                case 1:
+                    if (diff === 0) name = 'Unísono Justo';
+                    else if (diff === 1) name = 'Unísono Aumentado';
+                    else if (diff === -1) name = 'Unísono Disminuido (teórico)';
+                    else name = 'Unísono Alterado';
+                    break;
+                case 2:
+                    if (diff === 0) name = '2da Disminuida';
+                    else if (diff === 1) name = '2da menor';
+                    else if (diff === 2) name = '2da Mayor';
+                    else if (diff === 3) name = '2da Aumentada';
+                    else name = '2da Alterada';
+                    break;
+                case 3:
+                    if (diff === 2) name = '3ra Disminuida';
+                    else if (diff === 3) name = '3ra menor';
+                    else if (diff === 4) name = '3ra Mayor';
+                    else if (diff === 5) name = '3ra Aumentada';
+                    else name = '3ra Alterada';
+                    break;
+                case 4:
+                    if (diff === 4) name = '4ta Disminuida';
+                    else if (diff === 5) name = '4ta Justa';
+                    else if (diff === 6) name = '4ta Aumentada';
+                    else name = '4ta Alterada';
+                    break;
+                case 5:
+                    if (diff === 6) name = '5ta Disminuida';
+                    else if (diff === 7) name = '5ta Justa';
+                    else if (diff === 8) name = '5ta Aumentada';
+                    else name = '5ta Alterada';
+                    break;
+                case 6:
+                    if (diff === 7) name = '6ta Disminuida';
+                    else if (diff === 8) name = '6ta menor';
+                    else if (diff === 9) name = '6ta Mayor';
+                    else if (diff === 10) name = '6ta Aumentada';
+                    else name = '6ta Alterada';
+                    break;
+                case 7:
+                    if (diff === 9) name = '7ma Disminuida';
+                    else if (diff === 10) name = '7ma menor';
+                    else if (diff === 11) name = '7ma Mayor';
+                    else if (diff === 12) name = '7ma Aumentada';
+                    else name = '7ma Alterada';
+                    break;
+                case 8:
+                    if (diff === 11) name = 'Octava Disminuida';
+                    else if (diff === 12) name = 'Octava Justa';
+                    else if (diff === 13) name = 'Octava Aumentada';
+                    else name = 'Octava Alterada';
+                    break;
+                default:
+                    name = 'Intervalo Compuesto';
+            }
+
+            if (isCompound) {
+                return name.replace('2da', '9na')
+                           .replace('3ra', '10ma')
+                           .replace('4ta', '11va')
+                           .replace('5ta', '12va')
+                           .replace('6ta', '13ra')
+                           .replace('7ma', '14ta')
+                           .replace('Octava', '15ta');
+            }
+            return name;
+        };
+
+        const TABLE_DATA = [
+            { quality: 'Disminuida', matches: { 2: 0, 3: 2, 4: 4, 5: 6, 6: 7, 7: 9, 8: 11 } },
+            { quality: 'menor', matches: { 2: 1, 3: 3, 6: 8, 7: 10 } },
+            { quality: 'Justa', matches: { 4: 5, 5: 7, 8: 12 } },
+            { quality: 'Mayor', matches: { 2: 2, 3: 4, 6: 9, 7: 11 } },
+            { quality: 'Aumentada', matches: { 2: 3, 3: 5, 4: 6, 5: 8, 6: 10, 7: 12, 8: 13 } }
+        ];
+
+        // --- COMPONENTE PRINCIPAL ---
+        function MusicHacksApp() {
+            const [lang, setLang] = useState('es');
+            const [activeHack, setActiveHack] = useState(1);
+            const T = DICT[lang]; // Proxy Semántico
+
+            // Estado para Hack 1
+            const [rootNote, setRootNote] = useState('C');
+            const [rootAcc, setRootAcc] = useState('');
+            const [targetNote, setTargetNote] = useState('A');
+            const [targetAcc, setTargetAcc] = useState('');
+            const [h1IsCompound, setH1IsCompound] = useState(false);
+            const [h1Result, setH1Result] = useState(null);
+
+            // Estado para Hack 2
+            const [h2TopNote, setH2TopNote] = useState('E');
+            const [h2TopAcc, setH2TopAcc] = useState('');
+            const [h2BottomNote, setH2BottomNote] = useState('C');
+            const [h2BottomAcc, setH2BottomAcc] = useState('');
+            const [h2IsCompound, setH2IsCompound] = useState(false);
+            const [h2Result, setH2Result] = useState(null);
+
+            // Motor Hack 1: Cálculo algorítmico
+            useEffect(() => {
+                const rIdx = NOTES.indexOf(rootNote);
+                const tIdx = NOTES.indexOf(targetNote);
+                
+                let path = [];
+                let currentIdx = rIdx;
+                
+                let isTargetReached = false;
+                while (!isTargetReached) {
+                    path.push(NOTES[currentIdx]);
+                    if (NOTES[currentIdx] === targetNote) {
+                        isTargetReached = true;
+                    } else {
+                        currentIdx = (currentIdx + 1) % 7;
+                    }
+                }
+
+                const degree = path.length;
+                const spaces = degree - 1;
+                
+                let halfStepCrossings = 0;
+                let crossingPoints = [];
+                for (let i = 0; i < path.length - 1; i++) {
+                    if (NATURAL_HALF_STEPS.includes(path[i])) {
+                        halfStepCrossings++;
+                        crossingPoints.push(`${path[i]}->${path[i+1]}`);
+                    }
+                }
+
+                const accMap = { 'b': -1, '': 0, '#': 1 };
+                const rootMod = accMap[rootAcc];
+                const targetMod = accMap[targetAcc];
+                const chromaticShift = targetMod - rootMod;
+
+                const naturalSemitones = (spaces - halfStepCrossings) * 2 + halfStepCrossings;
+                const simpleTotalSemitones = naturalSemitones + chromaticShift;
+                
+                const finalDegree = degree + (h1IsCompound ? 7 : 0);
+                const finalTotalSemitones = simpleTotalSemitones + (h1IsCompound ? 12 : 0);
+
+                let calculationStr = `(${spaces} - ${halfStepCrossings}) × 2 + ${halfStepCrossings}`;
+                if (chromaticShift !== 0) {
+                    const shiftSymbol = chromaticShift > 0 ? '+' : '';
+                    calculationStr += ` ${shiftSymbol} ${chromaticShift} ${lang === 'es' ? '(cromático)' : '(chromatic)'}`;
+                }
+                if (h1IsCompound) {
+                    calculationStr += ` + 12 ${lang === 'es' ? '(Octava)' : '(Octave)'}`;
+                }
+
+                setH1Result({
+                    path,
+                    degree: finalDegree,
+                    spaces,
+                    halfStepCrossings,
+                    crossingPoints,
+                    naturalSemitones,
+                    chromaticShift,
+                    calculationStr,
+                    totalSemitones: finalTotalSemitones,
+                    intervalName: getIntervalName(finalDegree, finalTotalSemitones)
+                });
+
+            }, [rootNote, rootAcc, targetNote, targetAcc, h1IsCompound, lang]);
+
+            // Motor Hack 2: Regla del 9 
+            useEffect(() => {
+                const bIdx = NOTES.indexOf(h2BottomNote);
+                const tIdx = NOTES.indexOf(h2TopNote);
+                
+                let ascPath = [];
+                let currentIdx = bIdx;
+                let isTargetReached = false;
+                
+                while (!isTargetReached) {
+                    ascPath.push(NOTES[currentIdx]);
+                    if (NOTES[currentIdx] === h2TopNote) {
+                        isTargetReached = true;
+                    } else {
+                        currentIdx = (currentIdx + 1) % 7;
+                    }
+                }
+
+                const ascDegree = ascPath.length;
+                const ascSpaces = ascDegree - 1;
+                
+                let halfStepCrossings = 0;
+                for (let i = 0; i < ascPath.length - 1; i++) {
+                    if (NATURAL_HALF_STEPS.includes(ascPath[i])) {
+                        halfStepCrossings++;
+                    }
+                }
+
+                const accMap = { 'b': -1, '': 0, '#': 1 };
+                const bottomMod = accMap[h2BottomAcc];
+                const topMod = accMap[h2TopAcc];
+                const chromaticShift = topMod - bottomMod;
+
+                const ascNaturalSemitones = (ascSpaces - halfStepCrossings) * 2 + halfStepCrossings;
+                const ascTotalSemitones = ascNaturalSemitones + chromaticShift;
+                const ascIntervalName = getIntervalName(ascDegree, ascTotalSemitones);
+
+                const simpleDescDegree = 9 - ascDegree;
+                const simpleDescTotalSemitones = 12 - ascTotalSemitones;
+                
+                const finalDescDegree = simpleDescDegree + (h2IsCompound ? 7 : 0);
+                const finalDescTotalSemitones = simpleDescTotalSemitones + (h2IsCompound ? 12 : 0);
+                
+                const descIntervalName = getIntervalName(finalDescDegree, finalDescTotalSemitones);
+                
+                const extractQuality = (name) => {
+                    if (name.includes('Mayor')) return 'Mayor';
+                    if (name.includes('menor')) return 'menor';
+                    if (name.includes('Justa')) return 'Justa';
+                    if (name.includes('Aumentada')) return 'Aumentada';
+                    if (name.includes('Disminuida')) return 'Disminuida';
+                    return 'Alterada';
+                };
+
+                setH2Result({
+                    ascPath,
+                    ascDegree,
+                    ascTotalSemitones,
+                    ascIntervalName,
+                    ascQuality: extractQuality(ascIntervalName),
+                    descDegree: finalDescDegree,
+                    descTotalSemitones: finalDescTotalSemitones,
+                    descIntervalName,
+                    descQuality: extractQuality(descIntervalName)
+                });
+
+            }, [h2TopNote, h2TopAcc, h2BottomNote, h2BottomAcc, h2IsCompound, lang]);
+
+            return (
+                <div className="p-6">
+                    <div className="max-w-4xl mx-auto space-y-6">
+                        
+                        {/* ENCABEZADO DE IDENTIDAD Y RED DE VALOR */}
+                        <header className="border-b border-gray-800 pb-6 mb-8">
+                            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                                
+                                {/* Bloque Identidad Visual */}
+                                <div className="flex items-center gap-4">
+                                    <div className="h-20 w-20 rounded-2xl overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.2)] border border-gray-700 bg-gray-900 flex-shrink-0 flex items-center justify-center">
+                                        <img 
+                                            src="logo.jpg" 
+                                            alt="Logo" 
+                                            className="h-full w-full object-cover" 
+                                            onError={(e) => {
+                                                e.target.onerror = null; 
+                                                e.target.style.display = 'none';
+                                                e.target.nextSibling.style.display = 'flex';
+                                            }} 
+                                        />
+                                        {/* Fallback Topológico si falla la imagen */}
+                                        <div style={{display: 'none'}} className="h-full w-full flex items-center justify-center bg-cyan-900 text-cyan-300 font-bold text-xl">
+                                            CC
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-cyan-500">{T.title}</h1>
+                                        <p className="text-gray-400 mt-1 text-sm md:text-base">{T.subtitle}</p>
+                                        <p className="text-xs text-gray-500 mt-2 font-mono">
+                                            {T.createdBy} Carlos David 
+                                            <span className="text-gray-700 mx-2">|</span> 
+                                            <a href="https://cdcruzher.github.io/cdcruzher/" target="_blank" rel="noopener noreferrer" className="text-cyan-500 font-bold hover:text-cyan-400 transition-colors">@cdcruzher</a>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Bloque Controles Globales (Idioma y Call-to-Actions) */}
+                                <div className="flex flex-col items-start md:items-end gap-3 flex-shrink-0">
+                                    <button 
+                                        onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
+                                        className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-700 bg-gray-900/50 hover:bg-gray-800 text-xs font-bold text-gray-400 hover:text-white transition-colors"
+                                    >
+                                        <Globe className="w-4 h-4" />
+                                        <span>{T.langToggle}</span>
+                                    </button>
+                                    
+                                    <div className="flex gap-2 mt-1">
+                                        {/* Nodo de Ecosistema */}
+                                        <a 
+                                            href="https://cdcruzher.github.io/cdcruzher/" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 text-cyan-300 hover:bg-gray-700 hover:text-cyan-200 transition-colors text-xs font-bold border border-gray-700"
+                                        >
+                                            <LinkIcon className="w-4 h-4" /> {T.website}
+                                        </a>
+                                        
+                                        {/* Nodo de Captura de Energía (PayPal) */}
+                                        <a 
+                                            href="https://paypal.me/cdcruzher" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 text-gray-950 hover:bg-cyan-500 transition-all text-xs font-bold shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] border border-cyan-400"
+                                        >
+                                            <PaypalIcon className="w-4 h-4" /> {T.support}
+                                        </a>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </header>
+
+                        <div className="flex gap-4 mb-8">
+                            <button 
+                                onClick={() => setActiveHack(1)}
+                                className={`flex-1 py-3 px-4 rounded-md border flex items-center justify-center gap-2 transition-all ${activeHack === 1 ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-500 hover:border-gray-600'}`}
+                            >
+                                <Zap className="w-4 h-4" />
+                                {T.hack1Btn}
+                            </button>
+                            <button 
+                                onClick={() => setActiveHack(2)}
+                                className={`flex-1 py-3 px-4 rounded-md border flex items-center justify-center gap-2 transition-all ${activeHack === 2 ? 'bg-purple-950 border-purple-500 text-purple-300' : 'bg-gray-900 border-gray-800 text-gray-500 hover:border-gray-600'}`}
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                                {T.hack2Btn}
+                            </button>
+                        </div>
+
+                        {/* HACK 1 UI */}
+                        {activeHack === 1 && (
+                            <div className="space-y-6 transition-opacity duration-500">
+                                <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                                    <h2 className="text-lg font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                                        <ChevronRight className="w-5 h-5 text-cyan-500" />
+                                        {T.hack1Btn.split(': ')[1]} {/* Reutilizamos la segunda parte del string */}
+                                    </h2>
+                                    
+                                    <div className="flex flex-col md:flex-row items-center gap-6">
+                                        <div className="flex-1 w-full flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">{T.rootNote}</label>
+                                                <select value={rootNote} onChange={(e) => setRootNote(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded p-3 text-cyan-400 font-bold focus:border-cyan-500 outline-none">
+                                                    {NOTES.map(n => <option key={`r-${n}`} value={n}>{n}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="w-24">
+                                                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">{T.accidental}</label>
+                                                <select value={rootAcc} onChange={(e) => setRootAcc(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded p-3 text-cyan-400 font-bold focus:border-cyan-500 outline-none">
+                                                    <option value="">♮</option>
+                                                    <option value="b">♭</option>
+                                                    <option value="#">♯</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <ArrowRight className="w-8 h-8 text-gray-600 md:mt-6 shrink-0 rotate-90 md:rotate-0" />
+                                        
+                                        <div className="flex-1 w-full flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">{T.targetNote}</label>
+                                                <select value={targetNote} onChange={(e) => setTargetNote(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded p-3 text-cyan-400 font-bold focus:border-cyan-500 outline-none">
+                                                    {NOTES.map(n => <option key={`t-${n}`} value={n}>{n}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="w-24">
+                                                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">{T.accidental}</label>
+                                                <select value={targetAcc} onChange={(e) => setTargetAcc(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded p-3 text-cyan-400 font-bold focus:border-cyan-500 outline-none">
+                                                    <option value="">♮</option>
+                                                    <option value="b">♭</option>
+                                                    <option value="#">♯</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 flex items-center gap-3 bg-gray-950/50 p-3 rounded-lg border border-gray-800">
+                                        <input type="checkbox" id="compoundH1" checked={h1IsCompound} onChange={(e) => setH1IsCompound(e.target.checked)} className="w-4 h-4 text-cyan-600 bg-gray-900 border-gray-700 rounded focus:ring-cyan-500"/>
+                                        <label htmlFor="compoundH1" className="text-sm text-gray-400 select-none cursor-pointer font-bold">
+                                            {T.extendCompound}
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {h1Result && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                                            <h3 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">{T.trajectoryAnalysis}</h3>
+                                            <div className="flex flex-wrap gap-2 mb-6">
+                                                {h1Result.path.map((n, i) => (
+                                                    <React.Fragment key={i}>
+                                                        <div className={`w-10 h-10 flex items-center justify-center rounded ${NATURAL_HALF_STEPS.includes(n) && i !== h1Result.path.length - 1 ? 'bg-amber-900/50 text-amber-400 border border-amber-700/50' : 'bg-gray-800 text-gray-300'}`}>
+                                                            {n}
+                                                        </div>
+                                                        {i < h1Result.path.length - 1 && (
+                                                            <div className="flex items-center text-gray-600 text-xs">
+                                                                {NATURAL_HALF_STEPS.includes(n) ? <span className="text-amber-500">½</span> : <span>1</span>}
+                                                                <ArrowRight className="w-3 h-3 mx-1" />
+                                                            </div>
+                                                        )}
+                                                    </React.Fragment>
+                                                ))}
+                                            </div>
+                                            <ul className="space-y-2 text-sm text-gray-400">
+                                                <li><span className="text-gray-500">{T.baseDegree}</span> <span className="text-white font-bold">{h1Result.degree}</span> ({h1Result.spaces} {T.spaces})</li>
+                                                <li><span className="text-gray-500">{T.collisions}</span> <span className="text-amber-400 font-bold">{h1Result.halfStepCrossings}</span> {h1Result.halfStepCrossings > 0 && `(${h1Result.crossingPoints.join(', ')})`}</li>
+                                                {h1Result.chromaticShift !== 0 && (
+                                                    <li><span className="text-gray-500">{T.chromaticShift}</span> <span className="text-cyan-400 font-bold">{h1Result.chromaticShift > 0 ? `+${h1Result.chromaticShift}` : h1Result.chromaticShift} {T.semitones}</span></li>
+                                                )}
+                                            </ul>
+                                        </div>
+
+                                        <div className="bg-cyan-950/20 border border-cyan-900/50 rounded-lg p-6 flex flex-col justify-between">
+                                            <div>
+                                                <h3 className="text-sm font-semibold text-cyan-500 mb-4 uppercase tracking-wider">{T.heuristicCalc}</h3>
+                                                <div className="bg-gray-950 p-4 rounded border border-gray-800 font-mono text-sm mb-4 text-gray-300">
+                                                    <div className="mb-2 text-gray-500">{T.calcComment}</div>
+                                                    <div className="text-lg text-cyan-400">
+                                                        {h1Result.calculationStr} = <span className="font-bold text-white">{h1Result.totalSemitones} {T.st}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-4 pt-4 border-t border-cyan-900/30">
+                                                <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">{T.resultInterval} ({rootNote}{rootAcc} → {targetNote}{targetAcc})</div>
+                                                <div className="text-3xl font-bold text-white tracking-tight">
+                                                    {translateInterval(h1Result.intervalName, lang)}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="md:col-span-2 bg-gray-900 border border-gray-800 rounded-lg p-6">
+                                            <h3 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider flex items-center gap-2">
+                                                <Activity className="w-4 h-4 text-gray-500" />
+                                                {T.refMatrix}
+                                            </h3>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm text-center text-gray-400">
+                                                    <thead className="text-xs uppercase bg-gray-950/50 text-gray-500">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-left rounded-tl-lg">{T.qualityDegree}</th>
+                                                            {(h1IsCompound ? ['9na', '10ma', '11va', '12va', '13ra', '14ta', '15ta'] : ['2da', '3ra', '4ta', '5ta', '6ta', '7ma', 'Octava']).map(h => (
+                                                                <th key={`th-${h}`} className="px-4 py-3">{translateInterval(h, lang)}</th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {TABLE_DATA.map((row, idx) => (
+                                                            <tr key={idx} className="border-b border-gray-800/50 hover:bg-gray-950/30">
+                                                                <td className={`px-4 py-2 font-bold text-left ${row.quality === 'Mayor' || row.quality === 'Justa' ? 'text-cyan-600' : 'text-gray-300'}`}>
+                                                                    {translateInterval(row.quality, lang)}
+                                                                </td>
+                                                                {[2, 3, 4, 5, 6, 7, 8].map(deg => {
+                                                                    const st = row.matches[deg];
+                                                                    const displayDeg = deg + (h1IsCompound ? 7 : 0);
+                                                                    const displaySt = st !== undefined ? st + (h1IsCompound ? 12 : 0) : undefined;
+                                                                    const isMatch = h1Result.degree === displayDeg && h1Result.totalSemitones === displaySt;
+                                                                    return (
+                                                                        <td key={deg} className={`px-4 py-2 transition-colors ${isMatch ? 'bg-cyan-500 text-gray-900 font-bold' : (st !== undefined ? 'text-gray-400' : 'text-gray-700/30')}`}>
+                                                                            {displaySt !== undefined ? `${displaySt}` : '-'}
+                                                                        </td>
+                                                                    );
+                                                                })}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* HACK 2 UI */}
+                        {activeHack === 2 && (
+                            <div className="space-y-6 transition-opacity duration-500">
+                                <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+                                    <h2 className="text-lg font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                                        <ChevronRight className="w-5 h-5 text-purple-500" />
+                                        {T.hack2Title}
+                                    </h2>
+                                    
+                                    <div className="flex flex-col md:flex-row items-center gap-6">
+                                        <div className="flex-1 w-full flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">{T.originHigh}</label>
+                                                <select value={h2TopNote} onChange={(e) => setH2TopNote(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded p-3 text-purple-400 font-bold focus:border-purple-500 outline-none">
+                                                    {NOTES.map(n => <option key={`rt-${n}`} value={n}>{n}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="w-24">
+                                                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">{T.accidental}</label>
+                                                <select value={h2TopAcc} onChange={(e) => setH2TopAcc(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded p-3 text-purple-400 font-bold focus:border-purple-500 outline-none">
+                                                    <option value="">♮</option>
+                                                    <option value="b">♭</option>
+                                                    <option value="#">♯</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <ArrowDown className="w-8 h-8 text-gray-600 md:mt-6 shrink-0" />
+                                        
+                                        <div className="flex-1 w-full flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">{T.targetLow}</label>
+                                                <select value={h2BottomNote} onChange={(e) => setH2BottomNote(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded p-3 text-purple-400 font-bold focus:border-purple-500 outline-none">
+                                                    {NOTES.map(n => <option key={`tb-${n}`} value={n}>{n}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="w-24">
+                                                <label className="block text-xs text-gray-500 mb-2 uppercase tracking-wider">{T.accidental}</label>
+                                                <select value={h2BottomAcc} onChange={(e) => setH2BottomAcc(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded p-3 text-purple-400 font-bold focus:border-purple-500 outline-none">
+                                                    <option value="">♮</option>
+                                                    <option value="b">♭</option>
+                                                    <option value="#">♯</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 flex items-center gap-3 bg-gray-950/50 p-3 rounded-lg border border-gray-800">
+                                        <input type="checkbox" id="compoundH2" checked={h2IsCompound} onChange={(e) => setH2IsCompound(e.target.checked)} className="w-4 h-4 text-purple-600 bg-gray-900 border-gray-700 rounded focus:ring-purple-500"/>
+                                        <label htmlFor="compoundH2" className="text-sm text-gray-400 select-none cursor-pointer font-bold">
+                                            {T.extendCompound}
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {h2Result && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        
+                                        <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 relative overflow-hidden">
+                                            <div className="absolute right-[-10px] top-[-20px] text-gray-800/20 text-9xl font-black">1</div>
+                                            <h3 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider relative z-10">{T.step1Asc}</h3>
+                                            
+                                            <div className="flex flex-wrap gap-2 mb-6 relative z-10">
+                                                {h2Result.ascPath.map((n, i) => (
+                                                    <React.Fragment key={i}>
+                                                        <div className="w-10 h-10 flex items-center justify-center rounded bg-gray-800 text-gray-400 border border-gray-700">{n}</div>
+                                                        {i < h2Result.ascPath.length - 1 && <div className="flex items-center text-gray-600 text-xs"><ArrowRight className="w-3 h-3 mx-1" /></div>}
+                                                    </React.Fragment>
+                                                ))}
+                                            </div>
+                                            
+                                            <ul className="space-y-2 text-sm text-gray-400 relative z-10 border-t border-gray-800 pt-4">
+                                                <li className="flex justify-between"><span className="text-gray-500">{T.ascVector}</span> <span className="text-white">{h2BottomNote}{h2BottomAcc} → {h2TopNote}{h2TopAcc}</span></li>
+                                                <li className="flex justify-between"><span className="text-gray-500">{T.degreeIdentified}</span> <span className="text-white font-bold">{h2Result.ascDegree}</span></li>
+                                                <li className="flex justify-between mt-2 pt-2 border-t border-gray-800/50"><span className="text-gray-500">{T.anchorResult}</span> <span className="text-gray-300 italic">{translateInterval(h2Result.ascIntervalName, lang)}</span></li>
+                                            </ul>
+                                        </div>
+
+                                        <div className="bg-purple-950/20 border border-purple-900/50 rounded-lg p-6 flex flex-col justify-between relative overflow-hidden">
+                                            <div className="absolute right-[-10px] top-[-20px] text-purple-900/20 text-9xl font-black">9</div>
+                                            <div className="relative z-10">
+                                                <h3 className="text-sm font-semibold text-purple-500 mb-4 uppercase tracking-wider">{T.step2Inv}</h3>
+                                                <div className="space-y-3 mb-6">
+                                                    <div className="flex justify-between items-center bg-gray-950 p-3 rounded border border-gray-800">
+                                                        <span className="text-gray-400 text-sm">{T.oppositeOf} {translateInterval(h2Result.ascQuality, lang)}</span>
+                                                        <span className="text-lg font-bold text-white">= {translateInterval(h2Result.descQuality, lang)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center bg-gray-950/50 p-2 rounded border border-gray-800/50 border-dashed">
+                                                        <span className="text-gray-500 text-xs">{T.acousticVerif}</span>
+                                                        <span className="text-xs font-bold text-gray-400">12 - {h2Result.ascTotalSemitones} = {h2Result.descTotalSemitones - (h2IsCompound ? 12 : 0)} {T.st}</span>
+                                                    </div>
+                                                    {h2IsCompound && (
+                                                        <div className="flex justify-between items-center bg-purple-900/20 p-2 rounded border border-purple-800/50 mt-3">
+                                                            <span className="text-purple-400 text-xs font-bold">{T.projection}</span>
+                                                            <span className="text-xs font-bold text-purple-300">{T.projDesc}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="mt-4 pt-4 border-t border-purple-900/30 relative z-10">
+                                                <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">{T.resultInterval} ({h2TopNote}{h2TopAcc} ↓ {h2BottomNote}{h2BottomAcc})</div>
+                                                <div className="text-3xl font-bold text-white tracking-tight">{translateInterval(h2Result.descIntervalName, lang)}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="md:col-span-2 bg-gray-900 border border-gray-800 rounded-lg p-6">
+                                            <h3 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider flex items-center gap-2">
+                                                <RefreshCw className="w-4 h-4 text-gray-500" />
+                                                {T.descCheckMatrix}
+                                            </h3>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm text-center text-gray-400">
+                                                    <thead className="text-xs uppercase bg-gray-950/50 text-gray-500">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-left rounded-tl-lg">{T.qualityDegree}</th>
+                                                            {(h2IsCompound ? ['9na', '10ma', '11va', '12va', '13ra', '14ta', '15ta'] : ['2da', '3ra', '4ta', '5ta', '6ta', '7ma', 'Octava']).map(h => (
+                                                                <th key={`th-${h}`} className="px-4 py-3">{translateInterval(h, lang)}</th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {TABLE_DATA.map((row, idx) => (
+                                                            <tr key={idx} className="border-b border-gray-800/50 hover:bg-gray-950/30">
+                                                                <td className={`px-4 py-2 font-bold text-left ${row.quality === 'Mayor' || row.quality === 'Justa' ? 'text-purple-600' : 'text-gray-300'}`}>{translateInterval(row.quality, lang)}</td>
+                                                                {[2, 3, 4, 5, 6, 7, 8].map(deg => {
+                                                                    const st = row.matches[deg];
+                                                                    const displayDeg = deg + (h2IsCompound ? 7 : 0);
+                                                                    const displaySt = st !== undefined ? st + (h2IsCompound ? 12 : 0) : undefined;
+                                                                    const isMatch = h2Result.descDegree === displayDeg && h2Result.descTotalSemitones === displaySt;
+                                                                    return (
+                                                                        <td key={deg} className={`px-4 py-2 transition-colors ${isMatch ? 'bg-purple-500 text-gray-900 font-bold' : (st !== undefined ? 'text-gray-400' : 'text-gray-700/30')}`}>
+                                                                            {displaySt !== undefined ? `${displaySt}` : '-'}
+                                                                        </td>
+                                                                    );
+                                                                })}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- INICIALIZACIÓN ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MusicHacksApp />);
+    </script>
+</body>
+</html>
